@@ -1,0 +1,20 @@
+[
+  {
+    "question": "What method combines dense retrieval with a sparse BM25 index?",
+    "expected_document": "sample.pdf",
+    "expected_page": 2,
+    "expected_answer_keywords": ["reciprocal", "rank", "fusion"]
+  },
+  {
+    "question": "What programming language version does the framework require?",
+    "expected_document": "sample.md",
+    "expected_page": null,
+    "expected_answer_keywords": ["python", "3.11"]
+  },
+  {
+    "question": "What file is used to configure the framework?",
+    "expected_document": "sample.md",
+    "expected_page": null,
+    "expected_answer_keywords": ["widget.toml"]
+  }
+]

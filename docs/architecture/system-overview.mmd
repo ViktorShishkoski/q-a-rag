@@ -1,0 +1,144 @@
+%% =====================================================================
+%% Q&A RAG - System Overview (Level 1)
+%% Verified against source 2026-09-10. Do not treat as auto-generated.
+%%
+%% Shape legend:
+%%   ["..."]     rectangle  -> service / module / route / agent
+%%   {"..."}     diamond    -> orchestration / routing / decision node
+%%   [("...")]   cylinder   -> database / index / persistent store
+%%   ("...")     rounded    -> user / external system / output
+%%   -->|label|             solid gray arrow = control/data flow
+%%   -.->|label|            dashed arrow = optional / first-run-only path
+%% =====================================================================
+flowchart TB
+    classDef svc fill:#F5EFE0,stroke:#C9BFA8,stroke-width:1px,color:#3b3a36;
+    classDef dec fill:#EDE3C8,stroke:#BFA76F,stroke-width:1px,color:#3b3a36;
+    classDef db  fill:#E7DEC6,stroke:#B9A97F,stroke-width:1px,color:#3b3a36;
+    classDef io  fill:#FBF8F1,stroke:#D3C9AE,stroke-width:1px,color:#3b3a36;
+    classDef ext fill:#FBF8F1,stroke:#D3C9AE,stroke-width:1px,color:#3b3a36,stroke-dasharray:4 3;
+
+    subgraph USERS["Inputs / Users"]
+        direction LR
+        browser("Browser user<br/>retrieval console UI")
+        operator("Operator / CLI user<br/>terminal")
+    end
+
+    subgraph ENTRY["Entry points"]
+        direction LR
+        spa["React SPA<br/>frontend/src, built to frontend/dist"]
+        cli["CLI scripts<br/>scripts/ ingest, query, evaluate, rebuild_index, check_ollama .py"]
+        api{"FastAPI app<br/>app/main.py::create_app"}
+    end
+
+    subgraph WIRING["Application / orchestration layer"]
+        direction LR
+        routers{"API routers<br/>app/api/routes_health, routes_documents,<br/>routes_query, routes_analysis"}
+        di{"ServiceContainer (DI)<br/>app/core/dependencies.py"}
+        settings["Settings<br/>app/core/config.py + .env"]
+    end
+
+    subgraph CORE["Internal modules - app/"]
+        direction LR
+        ingest["IngestionService<br/>app/ingestion/service.py"]
+        docs["DocumentService<br/>app/ingestion/service.py"]
+        retr["RetrievalService<br/>app/retrieval/service.py"]
+        gen["GenerationService<br/>app/generation/service.py"]
+        analysis["Analysis seams V2<br/>app/analysis/ outline, extraction, compare"]
+        embed["Embedding providers<br/>app/embeddings/*.py"]
+        evalmod["Evaluation harness<br/>app/evaluation/*.py"]
+    end
+
+    subgraph STORES["Databases / infrastructure - data/"]
+        direction LR
+        qdrant[("Qdrant embedded<br/>data/indexes/qdrant<br/>collection 'documents'")]
+        bm25[("BM25 pickle<br/>data/indexes/bm25/index.pkl")]
+        manifest[("Manifest JSON<br/>data/indexes/manifest.json")]
+        raw[("Raw files<br/>data/raw/ID.pdf or .md")]
+        processed[("Processed sidecars<br/>data/processed/ID.outline.json + ID.tables.json")]
+    end
+
+    subgraph EXT["External services"]
+        direction LR
+        ollama("Ollama HTTP API<br/>localhost:11434 - generation, optional embeddings")
+        hf("Hugging Face Hub<br/>sentence-transformers / cross-encoder weights")
+    end
+
+    subgraph OUT["Outputs"]
+        direction LR
+        answer("Answer + verified citations<br/>QueryResponse JSON")
+        meta("Docs list / outline / tables / health JSON")
+        report("Evaluation report<br/>data/evaluation/report_TS.md + .json")
+    end
+
+    browser -->|"HTTP, same origin"| spa
+    spa -->|"fetch: /health /documents /query"| api
+    operator -->|"runs"| cli
+    operator -->|"uvicorn app.main:app"| api
+
+    api -->|"include_router"| routers
+    api -->|"lifespan builds container"| di
+    cli -->|"build_services(get_settings())"| di
+    di -->|"reads env"| settings
+    routers -->|"Depends(get_*_service)"| di
+
+    di -->|"constructs"| ingest
+    di -->|"constructs"| docs
+    di -->|"constructs"| retr
+    di -->|"constructs"| gen
+    di -->|"constructs"| analysis
+    di -->|"constructs"| embed
+
+    routers -->|"calls"| ingest
+    routers -->|"calls"| docs
+    routers -->|"calls"| retr
+    routers -->|"calls"| gen
+    routers -->|"calls"| analysis
+    cli -->|"calls"| ingest
+    cli -->|"calls"| retr
+    cli -->|"calls"| gen
+    cli -->|"calls"| evalmod
+    evalmod -->|"calls search + answer"| retr
+    evalmod -->|"calls answer"| gen
+
+    ingest -->|"embed_documents"| embed
+    retr -->|"embed_query"| embed
+    embed -.->|"downloads weights first run"| hf
+    gen -->|"POST /api/generate"| ollama
+    embed -.->|"if EMBEDDING_PROVIDER=ollama"| ollama
+
+    ingest -->|"upsert vectors"| qdrant
+    ingest -->|"upsert + save"| bm25
+    ingest -->|"put entry"| manifest
+    ingest -->|"write bytes"| raw
+    ingest -->|"write outline + tables"| processed
+    docs -->|"delete / read"| qdrant
+    docs -->|"delete / read"| bm25
+    docs -->|"read / remove"| manifest
+    docs -->|"read / unlink"| raw
+    docs -->|"read / unlink"| processed
+    retr -->|"vector search"| qdrant
+    retr -->|"bm25 search"| bm25
+
+    gen -->|"AnswerResult"| answer
+    routers -->|"returns"| answer
+    routers -->|"returns"| meta
+    evalmod -->|"write_report"| report
+
+    class browser,operator io;
+    class spa,cli,ingest,docs,retr,gen,analysis,embed,evalmod,settings svc;
+    class api,di,routers dec;
+    class qdrant,bm25,manifest,raw,processed db;
+    class ollama,hf ext;
+    class answer,meta,report io;
+
+    subgraph LEGEND["Legend"]
+        direction LR
+        l1["rectangle: service / module / route"]
+        l2{"diamond: orchestration / decision"}
+        l3[("cylinder: database / index / store")]
+        l4("rounded: user / external / output")
+    end
+    class l1 svc
+    class l2 dec
+    class l3 db
+    class l4 io

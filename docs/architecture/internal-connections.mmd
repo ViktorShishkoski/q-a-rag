@@ -1,0 +1,321 @@
+%% =====================================================================
+%% Q&A RAG - Internal Project Architecture (Level 2)
+%% Package + module level. Verified against source 2026-09-10.
+%%
+%% Edge labels: imports | calls | reads | writes | registers | mounts
+%% Dashed edges (-.->) are HTTP calls or first-run-only paths.
+%% Shapes: ["..."] module   {"..."} orchestration/decision
+%%         [("...")] store   ("...") external dependency
+%% =====================================================================
+flowchart LR
+    classDef mod fill:#F5EFE0,stroke:#C9BFA8,stroke-width:1px,color:#3b3a36;
+    classDef dec fill:#EDE3C8,stroke:#BFA76F,stroke-width:1px,color:#3b3a36;
+    classDef db  fill:#E7DEC6,stroke:#B9A97F,stroke-width:1px,color:#3b3a36;
+    classDef ext fill:#FBF8F1,stroke:#D3C9AE,stroke-width:1px,color:#3b3a36,stroke-dasharray:4 3;
+
+    %% ---------------- Frontend ----------------
+    subgraph FE["frontend/src - React SPA"]
+        direction TB
+        fe_main["main.tsx"]
+        fe_app["App.tsx<br/>QueryClientProvider + Console"]
+        fe_shell["components/layout/AppShell.tsx<br/>StatusPill"]
+        fe_chat["components/chat/*<br/>ChatPanel QueryForm AnswerView RetrievedChunksPanel TimingBadge"]
+        fe_docs["components/documents/*<br/>DocumentList DocumentOutline UploadDropzone RailFooter"]
+        fe_pdf["components/pdf/PdfViewerDialog.tsx"]
+        fe_queries["api/queries.ts<br/>useHealth useDocuments useUploadDocument useOutline useDeleteDocument useAskQuestion"]
+        fe_client["api/client.ts<br/>apiFetch postForm documentFileUrl fetchText"]
+        fe_types["api/types.ts<br/>hand-mirrored API shapes"]
+        fe_lib["lib/citations.ts + errors.ts + utils.ts"]
+    end
+
+    %% ---------------- API layer ----------------
+    subgraph API["app/api + app/main"]
+        direction TB
+        main["main.py::create_app<br/>lifespan, exception handler, static mount"]
+        r_health["routes_health.py<br/>GET /health"]
+        r_docs["routes_documents.py<br/>POST/GET/DELETE /documents ... /file /outline /tables"]
+        r_query["routes_query.py<br/>POST /query"]
+        r_analysis["routes_analysis.py<br/>POST /documents/{id}/extract, POST /compare"]
+        schemas["schemas.py<br/>OpenAPI re-exports (unused by routers)"]
+    end
+
+    %% ---------------- Core ----------------
+    subgraph COREPKG["app/core"]
+        direction TB
+        config["config.py<br/>Settings (pydantic-settings)"]
+        deps{"dependencies.py<br/>build_* factories + ServiceContainer + get_* shims"}
+        errors["errors.py<br/>RagError hierarchy + ERROR_STATUS_MAP"]
+        logging["logging.py"]
+    end
+
+    %% ---------------- Models ----------------
+    subgraph MODELS["app/models"]
+        direction TB
+        domain["domain.py<br/>Document Chunk ScoredChunk Citation TextBlock ChunkDraft OutlineNode Table ManifestEntry ..."]
+        reqs["requests.py<br/>QueryRequest ExtractRequest CompareRequest"]
+        resps["responses.py<br/>QueryResponse IngestResponse OutlineResponse HealthResponse ..."]
+    end
+
+    %% ---------------- Ingestion ----------------
+    subgraph ING["app/ingestion"]
+        direction TB
+        ing_svc["service.py<br/>IngestionService, DocumentService, Manifest"]
+        loaders["loaders.py<br/>load_document / load_pdf / load_markdown"]
+        cleaning["cleaning.py"]
+        chunking["chunking.py<br/>chunk_text + tiktoken helpers"]
+        metadata["metadata.py<br/>sha256 IDs, build_document/build_chunks"]
+        ocr["ocr.py<br/>OcrEngine / NoOpOcrEngine"]
+        tables["tables.py<br/>TableExtractor / NoOpTableExtractor"]
+    end
+
+    %% ---------------- Retrieval ----------------
+    subgraph RET["app/retrieval"]
+        direction TB
+        ret_svc["service.py<br/>RetrievalService.search"]
+        dense["dense.py<br/>DenseRetriever"]
+        sparse["sparse.py<br/>SparseRetriever"]
+        fusion["fusion.py<br/>reciprocal_rank_fusion"]
+        rerank["reranking.py<br/>Reranker / NoOpReranker / CrossEncoderReranker"]
+    end
+
+    %% ---------------- Generation ----------------
+    subgraph GEN["app/generation"]
+        direction TB
+        gen_svc["service.py<br/>GenerationService.answer, AnswerResult"]
+        gen_base["base.py<br/>GenerationProvider Protocol"]
+        gen_ollama["ollama.py<br/>OllamaGenerationProvider (httpx)"]
+        gen_mock["mock.py<br/>MockGenerationProvider"]
+        gen_ctx["context.py<br/>build_context (token budget)"]
+        gen_prompts["prompts.py<br/>SYSTEM_PROMPT + CITATION_TAG_PATTERN"]
+        gen_cit["citations.py<br/>extract_citations (verify vs included chunks)"]
+    end
+
+    %% ---------------- Analysis ----------------
+    subgraph ANA["app/analysis"]
+        direction TB
+        ana_outline["outline.py<br/>build_outline / flatten_outline"]
+        ana_extract["extraction.py<br/>StructuredExtractor / NoOp"]
+        ana_compare["compare.py<br/>DocumentComparer / NoOp"]
+    end
+
+    %% ---------------- Storage ----------------
+    subgraph STO["app/storage"]
+        direction TB
+        vs["vector_store.py<br/>VectorStore Protocol"]
+        qs["qdrant_store.py<br/>QdrantVectorStore"]
+        bs["bm25_store.py<br/>SparseIndex Protocol + BM25Store"]
+    end
+
+    %% ---------------- Embeddings ----------------
+    subgraph EMB["app/embeddings"]
+        direction TB
+        emb_base["base.py<br/>EmbeddingProvider Protocol"]
+        emb_st["sentence_transformers.py"]
+        emb_ol["ollama.py"]
+        emb_mock["mock.py"]
+    end
+
+    %% ---------------- Evaluation ----------------
+    subgraph EVAL["app/evaluation"]
+        direction TB
+        ev_ds["dataset.py<br/>EvalCase / load_dataset"]
+        ev_me["metrics.py<br/>recall_at_k mrr ndcg lexical_overlap citation_presence"]
+        ev_be["benchmark.py<br/>run_benchmark -> BenchmarkReport"]
+        ev_re["reporting.py<br/>write_report"]
+    end
+
+    %% ---------------- Scripts ----------------
+    subgraph SCR["scripts/"]
+        direction TB
+        s_ingest["ingest.py"]
+        s_query["query.py"]
+        s_rebuild["rebuild_index.py"]
+        s_eval["evaluate.py"]
+        s_check["check_ollama.py"]
+    end
+
+    %% ---------------- Stores + external ----------------
+    subgraph DATA["data/ stores"]
+        direction TB
+        d_qdrant[("Qdrant dir<br/>data/indexes/qdrant")]
+        d_bm25[("BM25 pickle<br/>data/indexes/bm25/index.pkl")]
+        d_manifest[("manifest.json")]
+        d_raw[("data/raw/")]
+        d_proc[("data/processed/")]
+        d_eval[("data/evaluation/")]
+    end
+    ext_ollama("Ollama<br/>localhost:11434")
+    ext_hf("Hugging Face Hub")
+    ext_fitz("PyMuPDF (fitz)")
+    ext_tiktoken("tiktoken cl100k_base")
+    ext_qc("qdrant-client")
+    ext_bm25lib("rank_bm25")
+    ext_fastapi("FastAPI / Depends")
+    ext_env("(.env + OS env vars)")
+
+    %% ---------- Frontend wiring ----------
+    fe_main -->|imports| fe_app
+    fe_app -->|imports| fe_shell
+    fe_app -->|imports| fe_chat
+    fe_app -->|imports| fe_docs
+    fe_app -->|imports| fe_queries
+    fe_shell -->|imports| fe_queries
+    fe_chat -->|imports| fe_queries
+    fe_chat -->|imports| fe_pdf
+    fe_chat -->|imports| fe_lib
+    fe_docs -->|imports| fe_queries
+    fe_pdf -->|imports| fe_client
+    fe_queries -->|imports| fe_client
+    fe_queries -->|imports| fe_types
+    fe_client -->|imports| fe_lib
+
+    fe_queries -.->|"GET /health"| r_health
+    fe_queries -.->|"GET/POST/DELETE /documents, /outline"| r_docs
+    fe_queries -.->|"POST /query"| r_query
+    fe_pdf -.->|"GET /documents/{id}/file"| r_docs
+
+    %% ---------- API wiring ----------
+    main -->|registers| r_health
+    main -->|registers| r_docs
+    main -->|registers| r_query
+    main -->|registers| r_analysis
+    main -->|"mounts frontend/dist at /"| FE
+    main -->|calls build_services| deps
+    main -->|imports| errors
+    main -->|imports| logging
+    r_health -->|"Depends(get_services)"| deps
+    r_docs -->|"Depends(get_*_service)"| deps
+    r_query -->|"Depends(get_*_service)"| deps
+    r_analysis -->|"Depends(get_*_service)"| deps
+    r_docs -->|imports| errors
+    r_docs -->|imports| resps
+    r_query -->|imports| reqs
+    r_query -->|imports| resps
+    r_analysis -->|imports| reqs
+    r_health -->|imports| resps
+    schemas -->|imports| reqs
+    schemas -->|imports| resps
+
+    %% ---------- Core wiring ----------
+    deps -->|imports| config
+    deps -->|"imports Depends/Request"| ext_fastapi
+    deps -->|constructs| ing_svc
+    deps -->|constructs| ret_svc
+    deps -->|constructs| gen_svc
+    deps -->|constructs| dense
+    deps -->|constructs| sparse
+    deps -->|constructs| rerank
+    deps -->|constructs| qs
+    deps -->|constructs| bs
+    deps -->|constructs| emb_st
+    deps -->|constructs| emb_ol
+    deps -->|constructs| emb_mock
+    deps -->|constructs| gen_ollama
+    deps -->|constructs| gen_mock
+    deps -->|constructs| ocr
+    deps -->|constructs| tables
+    deps -->|constructs| ana_extract
+    deps -->|constructs| ana_compare
+    config -->|reads| ext_env
+
+    %% ---------- Ingestion internals ----------
+    ing_svc -->|imports| loaders
+    ing_svc -->|imports| chunking
+    ing_svc -->|imports| metadata
+    ing_svc -->|imports| ocr
+    ing_svc -->|imports| tables
+    ing_svc -->|imports| ana_outline
+    ing_svc -->|imports| emb_base
+    ing_svc -->|imports| vs
+    ing_svc -->|imports| bs
+    ing_svc -->|imports| domain
+    ing_svc -->|imports| errors
+    loaders -->|imports| cleaning
+    loaders -->|imports| ocr
+    loaders -->|imports| domain
+    loaders -->|imports| ext_fitz
+    chunking -->|imports| ext_tiktoken
+    chunking -->|imports| domain
+    metadata -->|imports| domain
+    ana_outline -->|imports| domain
+
+    %% ---------- Retrieval internals ----------
+    ret_svc -->|imports| dense
+    ret_svc -->|imports| sparse
+    ret_svc -->|imports| fusion
+    ret_svc -->|imports| rerank
+    ret_svc -->|imports| domain
+    dense -->|imports| emb_base
+    dense -->|imports| vs
+    sparse -->|imports| bs
+    fusion -->|imports| domain
+    rerank -.->|"lazy import CrossEncoder"| ext_hf
+
+    %% ---------- Generation internals ----------
+    gen_svc -->|imports| gen_base
+    gen_svc -->|imports| gen_ctx
+    gen_svc -->|imports| gen_prompts
+    gen_svc -->|imports| gen_cit
+    gen_svc -->|imports| domain
+    gen_ctx -->|"imports (layer bypass)"| chunking
+    gen_ctx -->|imports| domain
+    gen_prompts -->|imports| domain
+    gen_cit -->|imports| gen_prompts
+    gen_mock -->|imports| gen_prompts
+    gen_ollama -->|imports| errors
+    gen_ollama -->|"POST /api/generate,/api/tags"| ext_ollama
+
+    %% ---------- Storage internals ----------
+    qs -->|implements| vs
+    qs -->|imports| ext_qc
+    qs -->|imports| domain
+    bs -->|imports| ext_bm25lib
+    bs -->|imports| domain
+
+    %% ---------- Embeddings internals ----------
+    emb_st -->|implements| emb_base
+    emb_ol -->|implements| emb_base
+    emb_mock -->|implements| emb_base
+    emb_st -.->|"lazy load weights"| ext_hf
+    emb_ol -->|"POST /api/embed"| ext_ollama
+
+    %% ---------- Evaluation internals ----------
+    ev_be -->|imports| ev_ds
+    ev_be -->|imports| ev_me
+    ev_be -->|imports| ret_svc
+    ev_be -->|imports| gen_svc
+    ev_re -->|imports| ev_be
+
+    %% ---------- Runtime store access ----------
+    ing_svc -->|writes vectors| d_qdrant
+    ing_svc -->|writes| d_bm25
+    ing_svc -->|writes| d_manifest
+    ing_svc -->|writes bytes| d_raw
+    ing_svc -->|writes sidecars| d_proc
+    qs -->|reads/writes| d_qdrant
+    bs -->|reads/writes| d_bm25
+    ret_svc -->|reads| d_qdrant
+    ret_svc -->|reads| d_bm25
+    ev_re -->|writes report| d_eval
+
+    %% ---------- Scripts wiring ----------
+    s_ingest -->|imports| config
+    s_ingest -->|imports| deps
+    s_ingest -->|"container.ingestion_service"| ing_svc
+    s_query -->|imports| deps
+    s_query -->|"container.retrieval_service + generation_service"| ret_svc
+    s_query -->|calls| gen_svc
+    s_rebuild -->|imports| deps
+    s_rebuild -->|imports| qs
+    s_rebuild -->|"scroll_all -> rebuild_from"| bs
+    s_eval -->|imports| deps
+    s_eval -->|imports| ev_be
+    s_eval -->|imports| ev_ds
+    s_eval -->|imports| ev_re
+    s_check -->|imports| config
+    s_check -->|imports| gen_ollama
+
+    class fe_main,fe_app,fe_shell,fe_chat,fe_docs,fe_pdf,fe_queries,fe_client,fe_types,fe_lib,main,r_health,r_docs,r_query,r_analysis,schemas,config,errors,logging,domain,reqs,resps,ing_svc,loaders,cleaning,chunking,metadata,ocr,tables,ret_svc,dense,sparse,fusion,rerank,gen_svc,gen_base,gen_ollama,gen_mock,gen_ctx,gen_prompts,gen_cit,ana_outline,ana_extract,ana_compare,vs,qs,bs,emb_base,emb_st,emb_ol,emb_mock,ev_ds,ev_me,ev_be,ev_re,s_ingest,s_query,s_rebuild,s_eval,s_check mod;
+    class deps dec;
+    class d_qdrant,d_bm25,d_manifest,d_raw,d_proc,d_eval db;
+    class ext_ollama,ext_hf,ext_fitz,ext_tiktoken,ext_qc,ext_bm25lib,ext_fastapi,ext_env ext;

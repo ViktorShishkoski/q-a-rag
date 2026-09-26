@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { background: #f6f5f3; font-family: "Libre Franklin", Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: oklch(0.5 0.11 205); text-decoration: none; }
+  a:hover { color: oklch(0.42 0.11 205); text-decoration: underline; }
+  textarea, input, button { font: inherit; }
+  ::placeholder { color: #a8a29b; }
+  @keyframes pulseDot { 0%,100% { opacity: 1 } 50% { opacity: 0.25 } }
+  @keyframes shimmer { 0% { background-position: -320px 0 } 100% { background-position: 320px 0 } }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #f6f5f3; color: #1c1a17; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 28px; height: 60px; border-bottom: 1px solid #e6e3dd; position: sticky; top: 0; z-index: 5; background-color: #9DE2DA">
+    <div style="display: flex; align-items: baseline; gap: 12px; border-radius: 5px; opacity: 1; overflow: visible; background: linear-gradient(180deg, #69D9CF, #F4EAE0)">
+      <span style="font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: #116A72">Q&amp;A RAG</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #316D6D; letter-spacing: 0.04em">retrieval console</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 18px">
+      <div style="display: flex; align-items: center; gap: 16px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8c867d">
+        <span>{{ docCount }} docs</span>
+        <span>{{ chunkCount }} chunks</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 7px; padding: 5px 11px 5px 9px; border: 1px solid #d7e5e3; background: #f0f7f6; border-radius: 999px">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.6 0.13 165); animation: pulseDot 2.4s ease-in-out infinite"></span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.42 0.07 175); letter-spacing: 0.02em">healthy</span>
+      </div>
+    </div>
+  </header>
+
+  <div style="flex: 1; display: grid; grid-template-columns: 300px minmax(0, 1fr); align-items: start">
+
+    <aside style="border-right: 1px solid #e6e3dd; background: #fffefc; min-height: calc(100vh - 60px); padding: 22px 20px; display: flex; flex-direction: column; gap: 22px; position: sticky; top: 60px">
+      <div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #a09a91; margin-bottom: 10px">Corpus</div>
+        <label for="fileInput" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 14px; border: 1px dashed #cfcac1; border-radius: 10px; background: #faf9f7; cursor: pointer; text-align: center; transition: border-color .15s, background .15s" style-hover="border-color: oklch(0.6 0.09 205); background: #f4f8f9">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8c867d" stroke-width="1.6" stroke-linecap="round"><path d="M12 16V4"></path><path d="M7 9l5-5 5 5"></path><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"></path></svg>
+          <div style="font-size: 12.5px; color: #6f6a62; line-height: 1.5">Drop a <strong style="font-weight: 600; color: #3d3a35">PDF</strong> or <strong style="font-weight: 600; color: #3d3a35">Markdown</strong> file<br>or click to browse</div>
+        </label>
+        <input id="fileInput" type="file" style="display: none">
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #a09a91">Indexed</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #c2bcb2">{{ docCount }}</div>
+        </div>
+        <sc-for list="{{ docs }}" as="doc" hint-placeholder-count="2">
+          <div onClick="{{ doc.onSelect }}" style="{{ doc.rowStyle }}" style-hover="border-color: #d8d3ca; background: #fffefc">
+            <div style="display: flex; align-items: flex-start; gap: 9px">
+              <span style="{{ doc.dotStyle }}"></span>
+              <div style="min-width: 0; flex: 1">
+                <div style="font-size: 12.5px; font-weight: 500; line-height: 1.4; color: #2a2723; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ doc.title }}</div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #a09a91">
+                  <span style="padding: 1px 5px; border: 1px solid #e2ded7; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em">{{ doc.kind }}</span>
+                  <span>{{ doc.chunks }} chunks</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid #efece7; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #b3ada3; line-height: 1.7">
+        <div>embed · {{ embedModel }}</div>
+        <div>gen · {{ genModel }}</div>
+      </div>
+    </aside>
+
+    <main style="padding: 30px 34px 60px; max-width: 980px; width: 100%; display: flex; flex-direction: column; gap: 22px; background-color: #FFFFFF">
+
+      <section style="background: #fffefc; border: 1px solid #e6e3dd; border-radius: 12px; box-shadow: 0 1px 2px rgba(28,26,23,0.03)">
+        <textarea rows="3" placeholder="Ask a question about your documents…" value="{{ query }}" onChange="{{ onQueryChange }}" onKeyDown="{{ onKeyDown }}" style="width: 100%; border: 0; background: transparent; resize: none; outline: none; padding: 18px 20px 4px; font-size: 16px; line-height: 1.55; color: #1c1a17; letter-spacing: -0.005em"></textarea>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 16px 12px 20px; border-top: 1px solid #f0ede8">
+          <div style="display: flex; align-items: center; gap: 16px">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8c867d; letter-spacing: 0.03em">top k</span>
+              <div style="display: flex; align-items: center; border: 1px solid #e2ded7; border-radius: 7px; overflow: hidden; background: #faf9f7">
+                <button onClick="{{ decK }}" style="width: 24px; height: 26px; border: 0; background: transparent; color: #6f6a62; cursor: pointer; font-size: 14px; line-height: 1" style-hover="background: #efece7">−</button>
+                <span style="min-width: 24px; text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #2a2723">{{ topK }}</span>
+                <button onClick="{{ incK }}" style="width: 24px; height: 26px; border: 0; background: transparent; color: #6f6a62; cursor: pointer; font-size: 14px; line-height: 1" style-hover="background: #efece7">+</button>
+              </div>
+            </div>
+            <button onClick="{{ toggleRerank }}" style="{{ rerankStyle }}">
+              <span style="{{ rerankBoxStyle }}"></span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.03em">rerank</span>
+            </button>
+            <button onClick="{{ toggleScope }}" style="display: flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid #e2ded7; border-radius: 7px; background: #faf9f7; cursor: pointer; color: #6f6a62" style-hover="border-color: #d3cec5">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.03em">{{ scopeLabel }}</span>
+            </button>
+          </div>
+          <button onClick="{{ onAsk }}" style="{{ askStyle }}">
+            <sc-if value="{{ busy }}" hint-placeholder-val="{{ false }}">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulseDot 1s ease-in-out infinite"></span>
+            </sc-if>
+            <span>{{ askLabel }}</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; opacity: 0.6">⏎</span>
+          </button>
+        </div>
+      </section>
+
+      <sc-if value="{{ showSuggestions }}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #b3ada3; margin-right: 4px">try</span>
+          <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+            <button onClick="{{ s.onPick }}" style="padding: 6px 11px; border: 1px solid #e6e3dd; border-radius: 999px; background: #fffefc; color: #5c574f; font-size: 12.5px; cursor: pointer; transition: border-color .15s, color .15s" style-hover="border-color: oklch(0.7 0.06 205); color: oklch(0.45 0.1 205)">{{ s.text }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ busy }}" hint-placeholder-val="{{ false }}">
+        <section style="background: #fffefc; border: 1px solid #e6e3dd; border-radius: 12px; padding: 22px">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.5 0.1 205); letter-spacing: 0.04em; margin-bottom: 16px">{{ stageLabel }}</div>
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <div style="height: 11px; width: 92%; border-radius: 3px; background: linear-gradient(90deg,#f1eee9 0%,#e6e2db 50%,#f1eee9 100%); background-size: 320px 100%; animation: shimmer 1.3s linear infinite"></div>
+            <div style="height: 11px; width: 78%; border-radius: 3px; background: linear-gradient(90deg,#f1eee9 0%,#e6e2db 50%,#f1eee9 100%); background-size: 320px 100%; animation: shimmer 1.3s linear infinite"></div>
+            <div style="height: 11px; width: 55%; border-radius: 3px; background: linear-gradient(90deg,#f1eee9 0%,#e6e2db 50%,#f1eee9 100%); background-size: 320px 100%; animation: shimmer 1.3s linear infinite"></div>
+          </div>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{ hasAnswer }}" hint-placeholder-val="{{ true }}">
+        <section style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start">
+          <article style="background: #fffefc; border: 1px solid #e6e3dd; border-radius: 12px; padding: 24px 26px; box-shadow: 0 1px 2px rgba(28,26,23,0.03)">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px">
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #a09a91">Answer</div>
+              <div style="display: flex; align-items: center; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #b3ada3">
+                <span>{{ latency }}</span>
+                <span>{{ tokens }}</span>
+              </div>
+            </div>
+            <div style="font-size: 15.5px; line-height: 1.68; color: #26241f; text-wrap: pretty">{{ answerBody }}</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 22px; padding-top: 16px; border-top: 1px solid #f0ede8">
+              <button style="padding: 5px 10px; border: 1px solid #e6e3dd; border-radius: 7px; background: #fffefc; color: #6f6a62; font-size: 12px; cursor: pointer" style-hover="border-color: #d3cec5">Copy</button>
+              <button style="padding: 5px 10px; border: 1px solid #e6e3dd; border-radius: 7px; background: #fffefc; color: #6f6a62; font-size: 12px; cursor: pointer" style-hover="border-color: #d3cec5">Regenerate</button>
+              <div style="margin-left: auto; display: flex; gap: 6px">
+                <button style="width: 28px; height: 28px; border: 1px solid #e6e3dd; border-radius: 7px; background: #fffefc; color: #8c867d; font-size: 12px; cursor: pointer" style-hover="border-color: #d3cec5">↑</button>
+                <button style="width: 28px; height: 28px; border: 1px solid #e6e3dd; border-radius: 7px; background: #fffefc; color: #8c867d; font-size: 12px; cursor: pointer" style-hover="border-color: #d3cec5">↓</button>
+              </div>
+            </div>
+          </article>
+
+          <aside style="display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; align-items: center; justify-content: space-between">
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #a09a91">Retrieved</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #c2bcb2">{{ sourceCount }}</div>
+            </div>
+            <sc-for list="{{ sources }}" as="src" hint-placeholder-count="3">
+              <div onMouseEnter="{{ src.onEnter }}" onMouseLeave="{{ src.onLeave }}" style="{{ src.cardStyle }}">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px">
+                  <span style="{{ src.badgeStyle }}">{{ src.n }}</span>
+                  <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #a09a91">{{ src.loc }}</span>
+                </div>
+                <div style="font-size: 12.5px; line-height: 1.55; color: #57524b">{{ src.snippet }}</div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 9px">
+                  <div style="flex: 1; height: 3px; border-radius: 2px; background: #efece7; overflow: hidden">
+                    <div style="{{ src.barStyle }}"></div>
+                  </div>
+                  <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #8c867d">{{ src.score }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </aside>
+        </section>
+      </sc-if>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+const ACCENT = "oklch(0.5 0.11 205)";
+
+const DOCS = [
+  { title: "Fundamentals of Data Engineering", kind: "pdf", chunks: 623 },
+  { title: "Internal RAG eval notes", kind: "md", chunks: 41 }
+];
+
+const SUGGESTIONS = [
+  "What are the stages of the data engineering lifecycle?",
+  "How is ELT different from ETL?",
+  "When should I choose a columnar store?"
+];
+
+const SOURCES = [
+  { n: 1, loc: "p. 84 · c/311", score: 0.87, snippet: "The data engineering lifecycle comprises five stages: generation, storage, ingestion, transformation, and serving data." },
+  { n: 2, loc: "p. 86 · c/318", score: 0.79, snippet: "Undercurrents cut across the lifecycle — security, data management, DataOps, architecture, orchestration, and software engineering." },
+  { n: 3, loc: "p. 91 · c/340", score: 0.64, snippet: "Storage is not a discrete stage; it underpins ingestion, transformation, and serving throughout the lifecycle." }
+];
+
+class Component extends DCLogic {
+  state = {
+    query: "What are the stages of the data engineering lifecycle?",
+    topK: 5,
+    rerank: true,
+    scopeAll: true,
+    selected: 0,
+    busy: false,
+    stage: 0,
+    answered: true,
+    hovered: null
+  };
+
+  componentWillUnmount() { clearInterval(this._t); }
+
+  ask = () => {
+    if (!this.state.query.trim()) return;
+    clearInterval(this._t);
+    this.setState({ busy: true, answered: false, stage: 0 });
+    this._t = setInterval(() => {
+      this.setState(s => {
+        if (s.stage >= 2) { clearInterval(this._t); return { busy: false, answered: true, stage: 0 }; }
+        return { stage: s.stage + 1 };
+      });
+    }, 750);
+  };
+
+  cite(n) {
+    const on = this.state.hovered === n;
+    return React.createElement("sup", {
+      key: "c" + n,
+      onMouseEnter: () => this.setState({ hovered: n }),
+      onMouseLeave: () => this.setState({ hovered: null }),
+      style: {
+        display: "inline-block", minWidth: 15, marginLeft: 2, padding: "1px 3px",
+        fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, lineHeight: "13px",
+        textAlign: "center", borderRadius: 3, cursor: "pointer", verticalAlign: "super",
+        background: on ? ACCENT : "#eef4f5", color: on ? "#fff" : ACCENT,
+        transition: "background .12s, color .12s"
+      }
+    }, n);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const accentOn = "oklch(0.55 0.11 205)";
+    return {
+      docCount: DOCS.length,
+      chunkCount: DOCS.reduce((a, d) => a + d.chunks, 0),
+      embedModel: "bge-small-en",
+      genModel: "gpt-4o-mini",
+      query: s.query,
+      topK: s.topK,
+      busy: s.busy,
+      hasAnswer: s.answered,
+      showSuggestions: !s.busy,
+      stageLabel: ["searching index…", "reranking " + s.topK * 4 + " candidates…", "drafting answer…"][s.stage],
+      askLabel: s.busy ? "Asking" : "Ask",
+      latency: "1.24s",
+      tokens: "412 tok",
+      sourceCount: SOURCES.length,
+      scopeLabel: s.scopeAll ? "all documents" : DOCS[s.selected].kind + " only",
+      onQueryChange: e => this.setState({ query: e.target.value }),
+      onKeyDown: e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.ask(); } },
+      onAsk: this.ask,
+      incK: () => this.setState(p => ({ topK: Math.min(20, p.topK + 1) })),
+      decK: () => this.setState(p => ({ topK: Math.max(1, p.topK - 1) })),
+      toggleRerank: () => this.setState(p => ({ rerank: !p.rerank })),
+      toggleScope: () => this.setState(p => ({ scopeAll: !p.scopeAll })),
+      askStyle: {
+        display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", border: 0,
+        borderRadius: 8, cursor: s.busy ? "wait" : "pointer", fontSize: 13.5, fontWeight: 600,
+        color: "#fff", background: s.busy ? "oklch(0.62 0.07 205)" : ACCENT,
+        boxShadow: "0 1px 2px rgba(28,26,23,0.12)"
+      },
+      rerankStyle: {
+        display: "flex", alignItems: "center", gap: 7, padding: "5px 9px",
+        border: "1px solid " + (s.rerank ? "#cfe0e3" : "#e2ded7"),
+        borderRadius: 7, background: s.rerank ? "#f2f8f9" : "#faf9f7",
+        color: s.rerank ? ACCENT : "#6f6a62", cursor: "pointer"
+      },
+      rerankBoxStyle: {
+        width: 11, height: 11, borderRadius: 3,
+        border: "1px solid " + (s.rerank ? ACCENT : "#cfcac1"),
+        background: s.rerank ? ACCENT : "transparent",
+        boxShadow: s.rerank ? "inset 0 0 0 2px #f2f8f9" : "none"
+      },
+      suggestions: SUGGESTIONS.map((text, i) => ({ text, onPick: () => this.setState({ query: text }) })),
+      docs: DOCS.map((d, i) => ({
+        title: d.title, kind: d.kind, chunks: d.chunks,
+        onSelect: () => this.setState({ selected: i }),
+        rowStyle: {
+          padding: "10px 11px", borderRadius: 9, cursor: "pointer",
+          border: "1px solid " + (s.selected === i ? "#cfe0e3" : "#efece7"),
+          background: s.selected === i ? "#f4f9fa" : "#fdfcfa",
+          transition: "border-color .15s, background .15s"
+        },
+        dotStyle: {
+          width: 6, height: 6, borderRadius: 2, marginTop: 5, flex: "0 0 auto",
+          background: s.selected === i ? accentOn : "#d3cec5"
+        }
+      })),
+      sources: SOURCES.map(src => {
+        const on = s.hovered === src.n;
+        return {
+          n: src.n, loc: src.loc, snippet: src.snippet, score: src.score.toFixed(2),
+          onEnter: () => this.setState({ hovered: src.n }),
+          onLeave: () => this.setState({ hovered: null }),
+          cardStyle: {
+            padding: "12px 13px", borderRadius: 10,
+            border: "1px solid " + (on ? "#bcd6da" : "#e6e3dd"),
+            background: on ? "#f6fbfb" : "#fffefc",
+            boxShadow: on ? "0 1px 3px rgba(28,26,23,0.06)" : "none",
+            transition: "border-color .12s, background .12s"
+          },
+          badgeStyle: {
+            minWidth: 18, padding: "1px 5px", borderRadius: 4, textAlign: "center",
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5,
+            background: on ? ACCENT : "#eef4f5", color: on ? "#fff" : ACCENT
+          },
+          barStyle: {
+            width: (src.score * 100) + "%", height: "100%",
+            background: on ? ACCENT : "#c9d9dc"
+          }
+        };
+      }),
+      answerBody: [
+        "The lifecycle runs in five stages — generation, storage, ingestion, transformation, and serving — each feeding the next rather than acting as an isolated step.",
+        this.cite(1),
+        " Storage sits slightly apart: it is treated as a stage but in practice underpins ingestion, transformation, and serving throughout.",
+        this.cite(3),
+        " Cutting across all of them are the undercurrents: security, data management, DataOps, architecture, orchestration, and software engineering.",
+        this.cite(2)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

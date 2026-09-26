@@ -1,0 +1,97 @@
+%% =====================================================================
+%% Q&A RAG - Storage & Data-Model Relationships (Level 3)
+%% There is no SQL database. Persistence = 3 index files + 3 filesystem
+%% trees, all joined by document_id = sha256(file bytes). Verified 2026-09-10.
+%%
+%% [("...")] = physical store   ["..."] = record / payload shape
+%% {"..."}   = the shared join key   -.-> = drift / rebuild relationship
+%% =====================================================================
+flowchart TB
+    classDef store fill:#E7DEC6,stroke:#B9A97F,stroke-width:1px,color:#3b3a36;
+    classDef rec   fill:#F5EFE0,stroke:#C9BFA8,stroke-width:1px,color:#3b3a36;
+    classDef key   fill:#EDE3C8,stroke:#BFA76F,stroke-width:1px,color:#3b3a36;
+    classDef io    fill:#FBF8F1,stroke:#D3C9AE,stroke-width:1px,color:#3b3a36;
+
+    joinkey{"document_id = sha256(file_bytes)<br/>content-addressed, idempotent<br/>metadata.py::compute_document_id"}
+
+    subgraph QD["Qdrant (embedded, local-persistent)"]
+        direction TB
+        qd_store[("data/indexes/qdrant<br/>collection 'documents'<br/>Distance.COSINE, size=EMBEDDING_DIM")]
+        qd_point["Point<br/>id = uuid5(NAMESPACE, chunk_id)<br/>vector = float[EMBEDDING_DIM]<br/>payload = full Chunk JSON"]
+    end
+
+    subgraph BM["BM25 sparse index"]
+        direction TB
+        bm_store[("data/indexes/bm25/index.pkl<br/>pickle of list[Chunk]")]
+        bm_rec["BM25Okapi rebuilt in memory on load()<br/>tokens = regex [a-z0-9]+ len>1"]
+    end
+
+    subgraph MF["Manifest"]
+        direction TB
+        mf_store[("data/indexes/manifest.json<br/>dict[document_id -> ManifestEntry]")]
+        mf_rec["ManifestEntry<br/>document_id (PK), filename,<br/>chunk_count, ingested_at, page_count?"]
+    end
+
+    subgraph RAWFS["Raw file tree"]
+        direction TB
+        raw_store[("data/raw/")]
+        raw_rec["ID.pdf / ID.md / ID.markdown<br/>exact uploaded bytes"]
+    end
+
+    subgraph PROCFS["Processed sidecar tree"]
+        direction TB
+        proc_store[("data/processed/")]
+        proc_out["&lt;document_id&gt;.outline.json<br/>list[OutlineNode] (nested tree)"]
+        proc_tab["&lt;document_id&gt;.tables.json<br/>list[Table] (empty with NoOp extractor)"]
+    end
+
+    subgraph EVALFS["Evaluation output tree"]
+        direction TB
+        eval_store[("data/evaluation/")]
+        eval_rec["report_&lt;timestamp&gt;.json + .md<br/>BenchmarkReport (per-case + means)"]
+    end
+
+    subgraph DOMAIN["In-memory domain model (app/models/domain.py)"]
+        direction TB
+        m_doc["Document<br/>document_id, filename, doc_type,<br/>page_count, ingested_at, content_hash"]
+        m_chunk["Chunk<br/>chunk_id (PK), document_id (FK),<br/>chunk_index, filename, page_start/end,<br/>section, text, token_count, char_start/end"]
+        m_scored["ScoredChunk<br/>chunk + dense/sparse/fused/rerank_score + rank"]
+        m_cit["Citation<br/>document_id, filename, page, section,<br/>chunk_id, quote, char_start/end"]
+        m_outline["OutlineNode<br/>title, level, page, section_path, children[]"]
+        m_table["Table<br/>document_id, table_index, page, section, caption, rows[][]"]
+    end
+
+    %% ---- join key fans out to every keyed store ----
+    joinkey -->|"keys"| mf_rec
+    joinkey -->|"names file"| raw_rec
+    joinkey -->|"prefixes"| proc_out
+    joinkey -->|"prefixes"| proc_tab
+    joinkey -->|"FK on every Chunk payload"| qd_point
+    joinkey -->|"FK on every pickled Chunk"| bm_rec
+
+    %% ---- store contains record ----
+    qd_store -->|contains| qd_point
+    bm_store -->|contains| bm_rec
+    mf_store -->|contains| mf_rec
+    raw_store -->|contains| raw_rec
+    proc_store -->|contains| proc_out
+    proc_store -->|contains| proc_tab
+    eval_store -->|contains| eval_rec
+
+    %% ---- domain <-> persistence ----
+    m_doc -->|"1 : N (document_id)"| m_chunk
+    m_chunk -->|"serialized as payload"| qd_point
+    m_chunk -->|"serialized in list"| bm_rec
+    m_scored -->|"wraps"| m_chunk
+    m_cit -->|"references chunk_id + document_id<br/>(built at query time, not stored)"| m_chunk
+    m_outline -->|"persisted to"| proc_out
+    m_table -->|"persisted to"| proc_tab
+    mf_rec -->|"chunk_count counts"| m_chunk
+
+    %% ---- drift / recovery ----
+    qd_store -.->|"scroll_all() -> rebuild_from()<br/>scripts/rebuild_index.py (Qdrant is source of truth)"| bm_store
+    qd_store -.->|"can drift from"| bm_store
+
+    class qd_store,bm_store,mf_store,raw_store,proc_store,eval_store store;
+    class qd_point,bm_rec,mf_rec,raw_rec,proc_out,proc_tab,eval_rec,m_doc,m_chunk,m_scored,m_cit,m_outline,m_table rec;
+    class joinkey key;

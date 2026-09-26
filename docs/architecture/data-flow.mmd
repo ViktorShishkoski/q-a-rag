@@ -1,0 +1,173 @@
+%% =====================================================================
+%% Q&A RAG - Data & Control Flow (Level 3)
+%% Shows how a payload is transformed at each step. Verified 2026-09-10.
+%%
+%% Edge labels: transforms | returns | reads | writes | embeds | decides
+%% {"..."} = decision   [("...")] = store   ["..."] = step/function
+%% ("...") = inbound request / outbound response object
+%% =====================================================================
+flowchart TB
+    classDef step fill:#F5EFE0,stroke:#C9BFA8,stroke-width:1px,color:#3b3a36;
+    classDef dec  fill:#EDE3C8,stroke:#BFA76F,stroke-width:1px,color:#3b3a36;
+    classDef db   fill:#E7DEC6,stroke:#B9A97F,stroke-width:1px,color:#3b3a36;
+    classDef io   fill:#FBF8F1,stroke:#D3C9AE,stroke-width:1px,color:#3b3a36;
+
+    %% ============ INGEST (write path) ============
+    subgraph INGEST["Ingest write path - IngestionService.ingest_document"]
+        direction TB
+        up("POST /documents (multipart file)<br/>or scripts/ingest.py --path")
+        b_bytes["file_bytes + filename"]
+        b_load["load_document / load_pdf / load_markdown<br/>+ clean_text + strip_repeated_headers_footers"]
+        b_blocks["list[TextBlock]<br/>text, page, section, is_heading"]
+        b_docid["build_document<br/>document_id = sha256(file_bytes)"]
+        b_rawwrite["write raw bytes"]
+        b_outline["build_outline(blocks)"]
+        b_outnodes["list[OutlineNode] tree"]
+        b_tables["table_extractor.extract(...)<br/>NoOp -> []"]
+        b_dedupe{"manifest.has(document_id)?"}
+        b_skip("IngestResponse skipped=true")
+        b_chunk["chunk_text<br/>tiktoken sliding window, overlap, min_tokens"]
+        b_drafts["list[ChunkDraft]<br/>text, page_start/end, section, token_count, char_start/end"]
+        b_buildchunks["build_chunks<br/>chunk_id = sha256(document_id:index:text)"]
+        b_chunks["list[Chunk]"]
+        b_embed["embedding_provider.embed_documents<br/>batched by EMBEDDING_BATCH_SIZE"]
+        b_vectors["list[vector] len == EMBEDDING_DIM"]
+        b_upsertq["vector_store.upsert(chunks, vectors)<br/>PointStruct id=uuid5(chunk_id), payload=Chunk"]
+        b_upsertb["sparse_index.upsert(chunks) + save()"]
+        b_manifest["manifest.put(ManifestEntry)"]
+        b_resp("IngestResponse<br/>document, chunks_created, skipped=false")
+    end
+
+    d_raw[("data/raw/ID.suffix")]
+    d_proc_o[("data/processed/ID.outline.json")]
+    d_proc_t[("data/processed/ID.tables.json")]
+    d_qdrant[("Qdrant collection 'documents'")]
+    d_bm25[("BM25 pickle index.pkl")]
+    d_manifest[("manifest.json")]
+
+    up -->|reads| b_bytes
+    b_bytes -->|transforms| b_load
+    b_load -->|returns| b_blocks
+    b_bytes -->|hashes| b_docid
+    b_docid -->|writes if absent| b_rawwrite
+    b_rawwrite -->|writes| d_raw
+    b_blocks -->|transforms| b_outline
+    b_outline -->|returns| b_outnodes
+    b_outnodes -->|writes sidecar every ingest| d_proc_o
+    b_blocks -->|transforms| b_tables
+    b_tables -->|writes sidecar every ingest| d_proc_t
+    b_docid -->|checks| b_dedupe
+    b_dedupe -->|"yes"| b_skip
+    b_dedupe -->|"no"| b_chunk
+    b_blocks -->|transforms| b_chunk
+    b_chunk -->|returns| b_drafts
+    b_drafts -->|transforms| b_buildchunks
+    b_buildchunks -->|returns| b_chunks
+    b_chunks -->|embeds| b_embed
+    b_embed -->|returns| b_vectors
+    b_chunks -->|writes| b_upsertq
+    b_vectors -->|writes| b_upsertq
+    b_upsertq -->|writes| d_qdrant
+    b_chunks -->|writes| b_upsertb
+    b_upsertb -->|writes| d_bm25
+    b_chunks -->|writes| b_manifest
+    b_manifest -->|writes| d_manifest
+    b_manifest -->|returns| b_resp
+
+    %% ============ QUERY (read path) ============
+    subgraph QUERY["Query read path - routes_query.query"]
+        direction TB
+        q_req("POST /query<br/>QueryRequest: question, top_k, rerank, filters")
+        q_search["RetrievalService.search"]
+        q_eq["DenseRetriever: embed_query(question)"]
+        q_qvec["query vector"]
+        q_dsearch["vector_store.search(qvec, candidate_k, filters)"]
+        q_dense["list[ScoredChunk] (dense_score)"]
+        q_ssearch["sparse_index.search(question, candidate_k)"]
+        q_sparse["list[ScoredChunk] (sparse_score)"]
+        q_rrf["reciprocal_rank_fusion([dense, sparse], k=RRF_K)"]
+        q_fused["fused list[ScoredChunk] (fused_score, rank)"]
+        q_rerankdec{"rerank? (request.rerank ?? RERANK_ENABLED)"}
+        q_rerank["CrossEncoderReranker.rerank(query, fused, top_k)"]
+        q_slice["fused[:top_k]"]
+        q_chunks["retrieved list[ScoredChunk]"]
+        q_answer["GenerationService.answer"]
+        q_ctx["build_context(chunks, context_budget_tokens)"]
+        q_bundle["ContextBundle<br/>text, included_chunks, truncated"]
+        q_prompt["build_prompt(question, context) + SYSTEM_PROMPT"]
+        q_gen["generation_provider.generate(prompt, system)<br/>Ollama POST /api/generate or Mock"]
+        q_genres["GenerationResult<br/>text, model, token counts"]
+        q_cit["extract_citations(text, included_chunks)<br/>drop tags not matching an included chunk"]
+        q_cits["list[Citation]"]
+        q_resp("QueryResponse<br/>answer, citations, retrieved_chunks,<br/>ContextInfo(chunks_used, chunk_ids, truncated),<br/>model, timing_ms")
+    end
+
+    q_req -->|transforms| q_search
+    q_search -->|embeds| q_eq
+    q_eq -->|returns| q_qvec
+    q_qvec -->|reads| q_dsearch
+    q_dsearch -->|reads| d_qdrant
+    q_dsearch -->|returns| q_dense
+    q_search -->|reads| q_ssearch
+    q_ssearch -->|reads| d_bm25
+    q_ssearch -->|returns| q_sparse
+    q_dense -->|transforms| q_rrf
+    q_sparse -->|transforms| q_rrf
+    q_rrf -->|returns| q_fused
+    q_fused -->|decides| q_rerankdec
+    q_rerankdec -->|"yes"| q_rerank
+    q_rerankdec -->|"no"| q_slice
+    q_rerank -->|returns| q_chunks
+    q_slice -->|returns| q_chunks
+    q_chunks -->|transforms| q_answer
+    q_answer -->|transforms| q_ctx
+    q_ctx -->|returns| q_bundle
+    q_bundle -->|transforms| q_prompt
+    q_prompt -->|calls| q_gen
+    q_gen -->|returns| q_genres
+    q_genres -->|transforms| q_cit
+    q_bundle -->|"included_chunks"| q_cit
+    q_cit -->|returns| q_cits
+    q_genres -->|assembles| q_resp
+    q_cits -->|assembles| q_resp
+    q_chunks -->|assembles| q_resp
+
+    %% ============ DELETE ============
+    subgraph DEL["Delete - DocumentService.delete_document"]
+        direction TB
+        del_req("DELETE /documents/{id}")
+        del_guard{"manifest.get(id) exists?"}
+        del_404("DocumentNotFoundError -> 404")
+        del_do["vector_store.delete_document(id)<br/>sparse_index.delete_document(id) + save()<br/>manifest.remove(id)<br/>unlink raw + outline + tables sidecars"]
+        del_resp("DeleteDocumentResponse<br/>document_id, deleted_chunks")
+    end
+    del_req -->|checks| del_guard
+    del_guard -->|"no"| del_404
+    del_guard -->|"yes"| del_do
+    del_do -->|writes| d_qdrant
+    del_do -->|writes| d_bm25
+    del_do -->|writes| d_manifest
+    del_do -->|writes| d_raw
+    del_do -->|writes| d_proc_o
+    del_do -->|writes| d_proc_t
+    del_do -->|returns| del_resp
+
+    %% ============ REBUILD BM25 ============
+    subgraph REB["Rebuild BM25 - scripts/rebuild_index.py"]
+        direction TB
+        reb_start("operator runs rebuild_index.py")
+        reb_scroll["vector_store.scroll_all()"]
+        reb_chunks["list[Chunk] (Qdrant = source of truth)"]
+        reb_rebuild["sparse_index.rebuild_from(chunks) + save()"]
+    end
+    reb_start -->|reads| reb_scroll
+    reb_scroll -->|reads| d_qdrant
+    reb_scroll -->|returns| reb_chunks
+    reb_chunks -->|transforms| reb_rebuild
+    reb_rebuild -->|writes| d_bm25
+
+    class up,q_req,del_req,reb_start io;
+    class b_resp,b_skip,q_resp,del_resp,del_404 io;
+    class b_dedupe,q_rerankdec,del_guard dec;
+    class d_raw,d_proc_o,d_proc_t,d_qdrant,d_bm25,d_manifest db;
+    class b_bytes,b_load,b_blocks,b_docid,b_rawwrite,b_outline,b_outnodes,b_tables,b_chunk,b_drafts,b_buildchunks,b_chunks,b_embed,b_vectors,b_upsertq,b_upsertb,b_manifest,q_search,q_eq,q_qvec,q_dsearch,q_dense,q_ssearch,q_sparse,q_rrf,q_fused,q_rerank,q_slice,q_chunks,q_answer,q_ctx,q_bundle,q_prompt,q_gen,q_genres,q_cit,q_cits,del_do,reb_scroll,reb_chunks,reb_rebuild step;
