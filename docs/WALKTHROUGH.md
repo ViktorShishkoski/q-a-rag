@@ -57,7 +57,7 @@ Design priorities, in order:
 | Generation | Ollama `qwen3:1.7b` | `think=false`, `num_ctx=2048`, `num_predict=256` |
 | Reranker (optional) | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Lazy load, gated by `RERANK_ENABLED` |
 | Frontend | React 19 + Vite + Tailwind v4 + TanStack Query + shadcn-style UI | `react-pdf` for the source viewer |
-| Lint / types / tests | Ruff, Mypy (strict on `app/`), Pytest | See `CLAUDE.md` for exact commands |
+| Lint / types / tests | Ruff, Mypy (strict on `app/`), Pytest | See `docs/DEVELOPMENT.md` for exact commands |
 
 ---
 
@@ -91,7 +91,7 @@ Q&A RAG/
 ├── docs/                   # this file + the focused topic docs
 ├── pyproject.toml          # deps, ruff, mypy, pytest config
 ├── .env.example            # every setting with its default + inline caveats
-└── CLAUDE.md               # build/run/test/lint command reference
+└── README.md               # overview + quickstart
 ```
 
 **Package dependency rule (enforced by convention, visible in imports):**
@@ -682,9 +682,9 @@ All add the repo root to `sys.path` and build a real `ServiceContainer` via
 | `rebuild_index.py` | `python scripts/rebuild_index.py` | Rebuild BM25 from `qdrant.scroll_all()` — recovery path for index drift. Does not touch Qdrant. |
 | `evaluate.py` | `python scripts/evaluate.py --dataset data/evaluation/eval_dataset.json [--top-k N] [--out-dir path]` | Run the benchmark, write JSON + Markdown reports. |
 
-> Note: `CLAUDE.md` shows `python scripts/ingest.py <path-to-file>` — the script
+> Note: `docs/DEVELOPMENT.md` shows `python scripts/ingest.py <path-to-file>` — the script
 > actually requires the `--path` flag (`--path <path-to-file>`). Prefix any of
-> these with `.venv\Scripts\` on Windows as in `CLAUDE.md`.
+> these with `.venv\Scripts\` on Windows as in `docs/DEVELOPMENT.md`.
 
 ---
 
@@ -723,7 +723,7 @@ Run against a fast mock stack with `GENERATION_PROVIDER=mock` /
 
 ## 17. Testing — `tests/`
 
-TDD is a project rule (`CLAUDE.md`): prefer real / in-memory adapters and the
+TDD is a project rule (`docs/DEVELOPMENT.md`): prefer real / in-memory adapters and the
 mock providers over mocking internals.
 
 | Suite | What it covers | Markers |
@@ -827,17 +827,14 @@ cross-encoder +~80 MB (only if enabled); embedded Qdrant tens of MB; Ollama
 
 | Goal | Where | How |
 |---|---|---|
-| A new document format | `app/ingestion/loaders.py` | Add a `load_<fmt>` returning `list[TextBlock]`; dispatch in `load_document`; extend `_SUPPORTED_SUFFIXES` in `routes_documents.py` and the CLI. See the `document-ingestion` skill. |
+| A new document format | `app/ingestion/loaders.py` | Add a `load_<fmt>` returning `list[TextBlock]`; dispatch in `load_document`; extend `_SUPPORTED_SUFFIXES` in `routes_documents.py` and the CLI. |
 | A new embedding backend | `app/embeddings/` | Implement the `EmbeddingProvider` Protocol; add a branch in `build_embedding_provider`; add the enum value to `EMBEDDING_PROVIDER`'s `Literal`. |
 | A different vector store | `app/storage/` | Implement `VectorStore`; swap in `build_vector_store`. Nothing in `retrieval/` or `ingestion/` changes. |
 | A different LLM host | `app/generation/` | Implement `GenerationProvider`; branch in `build_generation_provider`. |
-| Tune retrieval | env only | `RETRIEVAL_CANDIDATE_K`, `RRF_K`, `RERANK_ENABLED`, `CHUNK_SIZE_TOKENS`/`CHUNK_OVERLAP_TOKENS`. Re-ingest after chunk changes. See the `hybrid-retriveal` skill. |
+| Tune retrieval | env only | `RETRIEVAL_CANDIDATE_K`, `RRF_K`, `RERANK_ENABLED`, `CHUNK_SIZE_TOKENS`/`CHUNK_OVERLAP_TOKENS`. Re-ingest after chunk changes. |
 | A new API endpoint | `app/api/` | New `APIRouter`; depend on `get_*_service` shims; `include_router` in `main.py`; raise `RagError` subclasses for failures. |
 | A new eval metric | `app/evaluation/metrics.py` + `benchmark.py` | Add the pure function, wire it into `CaseResult` / `BenchmarkReport` / `reporting.py`. |
 
-The `.claude/skills/` directory holds project-specific guidance skills
-(`rag-architecture`, `document-ingestion`, `hybrid-retriveal`, `local-ollama`,
-…) that go deeper on each subsystem's rules.
 ```
 
 ---
@@ -846,7 +843,7 @@ The `.claude/skills/` directory holds project-specific guidance skills
 
 The system is evolving from "RAG Q&A" into a **document-analysis** system. The
 roadmap ships in three tiers; the canonical, always-current version of this plan
-(with the per-tier test plan) lives in **`CLAUDE.md` → "Document-Analysis
+(with the per-tier test plan) lives in **`docs/DEVELOPMENT.md` → "Document-Analysis
 Roadmap"**. This section is the narrative companion.
 
 ### Guiding constraints

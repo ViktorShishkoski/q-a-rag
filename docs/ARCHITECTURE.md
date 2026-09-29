@@ -66,7 +66,7 @@ change in `ingestion/`, `retrieval/`, or `generation/`.
   are skipped with a logged warning. `app/ingestion/ocr.py` defines the
   `OcrEngine` seam (`load_pdf(..., ocr_engine=...)`) so a real backend can be
   dropped in behind `OCR_ENABLED`; the default `NoOpOcrEngine` keeps today's
-  behaviour. See the V2 roadmap in `CLAUDE.md`.
+  behaviour. See the V2 roadmap in `docs/DEVELOPMENT.md`.
 - **One-time model downloads**: `sentence-transformers` (default embeddings)
   and the optional cross-encoder reranker download their weights from
   Hugging Face on first use, cached locally after. This is separate from

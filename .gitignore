@@ -23,3 +23,7 @@ htmlcov/
 
 frontend/node_modules/
 frontend/dist/
+
+# AI assistant / agent config (local only)
+.claude/
+CLAUDE.md

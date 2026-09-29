@@ -1,6 +1,6 @@
 """Core domain entities shared across all layers.
 
-Metadata rule (see .claude/skills/rag-architecture): document ID, chunk ID,
+Metadata rule (see docs/ARCHITECTURE.md): document ID, chunk ID,
 filename, page, section, and source text must be preserved end-to-end from
 ingestion through retrieval to the final citation. Every type below carries
 enough of that metadata to satisfy the rule at its layer.

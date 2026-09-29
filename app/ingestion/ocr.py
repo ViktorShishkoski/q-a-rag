@@ -10,7 +10,7 @@ touching the loader's control flow.
 implementation (e.g. Tesseract via `pytesseract`, or a hosted vision model) is
 a drop-in: implement `OcrEngine`, add a branch to `build_ocr_engine`, flip the
 flag. It must load any heavy model lazily on first `ocr_page` call, never at
-construction (see CLAUDE.md DI rules).
+construction (see docs/DEVELOPMENT.md DI rules).
 """
 
 from __future__ import annotations
