@@ -12,7 +12,7 @@ def test_ollama_defaults_match_spec(monkeypatch):
     assert settings.ollama_context_length == 2048
     assert settings.ollama_num_predict == 256
     assert settings.ollama_num_parallel == 1
-    assert settings.ollama_keep_alive == 0
+    assert settings.ollama_keep_alive == 300
     assert settings.ollama_think is False
 
 

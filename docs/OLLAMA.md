@@ -8,7 +8,7 @@ OLLAMA_GENERATION_MODEL=qwen3:1.7b
 OLLAMA_CONTEXT_LENGTH=2048
 OLLAMA_NUM_PREDICT=256
 OLLAMA_NUM_PARALLEL=1
-OLLAMA_KEEP_ALIVE=0
+OLLAMA_KEEP_ALIVE=300
 OLLAMA_THINK=false
 OLLAMA_TIMEOUT_S=60
 ```
@@ -29,7 +29,7 @@ OLLAMA_TIMEOUT_S=60
     "system": "...",
     "stream": false,
     "think": false,
-    "keep_alive": 0,
+    "keep_alive": 300,
     "options": { "num_ctx": 2048, "num_predict": 256 }
   }
   ```
@@ -58,13 +58,13 @@ API. Disabled by default (`OLLAMA_THINK=false`) to save tokens/latency on a
 low-resource setup; verified against a live `qwen3:1.7b` instance during
 development (`tests/integration/test_ollama_live.py`).
 
-### `keep_alive: 0`
+### `keep_alive: 300`
 
-Unloads the model from memory after every single request - the default,
-memory-conscious choice for this project. The tradeoff: every generation call
-pays a full model-load cost (~20-30s on typical consumer hardware for a
-1.7B Q4 model). Raise `OLLAMA_KEEP_ALIVE` (seconds, or `-1` for indefinite) if
-you have RAM to spare and want faster repeated queries.
+Keeps the model in memory for 5 minutes after the last request (the default),
+so only the first query after a pause pays the full model-load cost (~20-30s
+on typical consumer hardware for a 1.7B Q4 model). Set `OLLAMA_KEEP_ALIVE=0`
+to unload after every call on a memory-constrained machine, or `-1` to keep
+it loaded indefinitely.
 
 ## Embedding provider tradeoff
 

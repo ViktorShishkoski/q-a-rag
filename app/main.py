@@ -10,6 +10,8 @@ touching real project data directories.
 
 from __future__ import annotations
 
+import logging
+import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -28,7 +30,27 @@ from app.core.logging import configure_logging
 
 ContainerFactory = Callable[[], ServiceContainer]
 
+logger = logging.getLogger(__name__)
+
 _DATA_DIRS = ("data/raw", "data/processed", "data/indexes", "data/evaluation")
+
+
+def _warm_up(services: ServiceContainer) -> None:
+    """Load the embedding model and the LLM before the first request needs them.
+
+    Best effort: a real problem resurfaces (with its proper error) on first use.
+    """
+    try:
+        services.embedding_provider.embed_query("warm-up")
+        logger.info("Embedding model warmed up")
+    except Exception:
+        logger.warning("Embedding warm-up failed", exc_info=True)
+    try:
+        # One token is enough for Ollama to load the model (kept for OLLAMA_KEEP_ALIVE).
+        services.generation_provider.generate("warm-up", max_tokens=1)
+        logger.info("Generation model warmed up")
+    except Exception:
+        logger.warning("Generation warm-up failed", exc_info=True)
 
 
 def create_app(container_factory: ContainerFactory | None = None) -> FastAPI:
@@ -40,7 +62,10 @@ def create_app(container_factory: ContainerFactory | None = None) -> FastAPI:
         configure_logging(settings.log_level)
         for d in _DATA_DIRS:
             Path(d).mkdir(parents=True, exist_ok=True)
-        app.state.services = factory()
+        services = factory()
+        app.state.services = services
+        if services.settings.warmup_on_startup:
+            threading.Thread(target=_warm_up, args=(services,), daemon=True).start()
         yield
 
     app = FastAPI(title="Q&A RAG Backend", version="0.1.0", lifespan=lifespan)

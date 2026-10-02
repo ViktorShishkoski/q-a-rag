@@ -19,21 +19,24 @@ const SUGGESTIONS = [
   "List the main sections and what they cover.",
 ];
 
-const STAGE_LABELS = (topK: number): string[] => [
-  "searching index…",
-  `reranking ${topK * 4} candidates…`,
-  "drafting answer…",
-];
+// The API answers in one response, so the stage is inferred from elapsed time:
+// retrieval (and the optional rerank) take about a second; the rest is the LLM.
+function stageLabel(elapsedS: number, rerank: boolean): string {
+  if (elapsedS < 1) return "searching index…";
+  if (rerank && elapsedS < 2) return "reranking candidates…";
+  return "drafting answer…";
+}
 
 function docTypeFromFilename(filename: string): "pdf" | "markdown" {
   return filename.toLowerCase().endsWith(".pdf") ? "pdf" : "markdown";
 }
 
-function LoadingCard({ stage, topK }: { stage: number; topK: number }) {
+function LoadingCard({ elapsedS, rerank }: { elapsedS: number; rerank: boolean }) {
   return (
     <section className="rounded-xl border border-line bg-surface p-[22px] shadow-card">
-      <div className="mb-4 font-mono text-[11px] tracking-[0.04em] text-accent-brand">
-        {STAGE_LABELS(topK)[stage]}
+      <div className="mb-4 flex items-center justify-between font-mono text-[11px] tracking-[0.04em]">
+        <span className="text-accent-brand">{stageLabel(elapsedS, rerank)}</span>
+        <span className="text-ink-8 tabular-nums">{elapsedS}s</span>
       </div>
       <div className="flex flex-col gap-2.5">
         {["92%", "78%", "55%"].map((w) => (
@@ -53,7 +56,7 @@ export function ChatPanel({ selectedDoc }: ChatPanelProps) {
   const [topK, setTopK] = useState(5);
   const [rerank, setRerank] = useState(true);
   const [scopeAll, setScopeAll] = useState(true);
-  const [stage, setStage] = useState(0);
+  const [elapsedS, setElapsedS] = useState(0);
   const [result, setResult] = useState<QueryResponse | null>(null);
   const [hoveredChunkId, setHoveredChunkId] = useState<string | null>(null);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
@@ -63,16 +66,17 @@ export function ChatPanel({ selectedDoc }: ChatPanelProps) {
 
   useEffect(() => {
     if (!busy) return;
+    const startedAt = Date.now();
     const id = window.setInterval(() => {
-      setStage((s) => (s >= 2 ? 2 : s + 1));
-    }, 750);
+      setElapsedS(Math.floor((Date.now() - startedAt) / 1000));
+    }, 250);
     return () => window.clearInterval(id);
   }, [busy]);
 
   function submit() {
     const question = query.trim();
     if (!question || busy) return;
-    setStage(0);
+    setElapsedS(0);
     const scoped = !scopeAll && selectedDoc !== null;
     askQuestion.mutate(
       {
@@ -96,7 +100,7 @@ export function ChatPanel({ selectedDoc }: ChatPanelProps) {
   }
 
   return (
-    <div className="flex flex-col gap-[22px]">
+    <div className="flex flex-col gap-4 min-[1100px]:min-h-0 min-[1100px]:flex-1">
       <QueryForm
         query={query}
         onQueryChange={setQuery}
@@ -129,24 +133,29 @@ export function ChatPanel({ selectedDoc }: ChatPanelProps) {
         </div>
       )}
 
-      {busy && <LoadingCard stage={stage} topK={topK} />}
+      {busy && <LoadingCard elapsedS={elapsedS} rerank={rerank} />}
 
+      {/* Desktop: fills the remaining height; answer and sources scroll on their own. */}
       {!busy && result && (
-        <section className="grid grid-cols-1 items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_300px]">
-          <AnswerView
-            result={result}
-            hoveredChunkId={hoveredChunkId}
-            onHoverChunk={setHoveredChunkId}
-            onCitationClick={setActiveCitation}
-            onRegenerate={submit}
-          />
-          <RetrievedChunksPanel
-            chunks={result.retrieved_chunks}
-            context={result.context}
-            hoveredChunkId={hoveredChunkId}
-            onHoverChunk={setHoveredChunkId}
-            onOpen={setActiveCitation}
-          />
+        <section className="grid grid-cols-1 items-start gap-5 min-[1100px]:min-h-0 min-[1100px]:flex-1 min-[1100px]:grid-cols-[minmax(0,1fr)_340px] min-[1100px]:grid-rows-[minmax(0,1fr)]">
+          <div className="min-[1100px]:max-h-full min-[1100px]:overflow-y-auto">
+            <AnswerView
+              result={result}
+              hoveredChunkId={hoveredChunkId}
+              onHoverChunk={setHoveredChunkId}
+              onCitationClick={setActiveCitation}
+              onRegenerate={submit}
+            />
+          </div>
+          <div className="min-[1100px]:max-h-full min-[1100px]:overflow-y-auto min-[1100px]:pr-1">
+            <RetrievedChunksPanel
+              chunks={result.retrieved_chunks}
+              context={result.context}
+              hoveredChunkId={hoveredChunkId}
+              onHoverChunk={setHoveredChunkId}
+              onOpen={setActiveCitation}
+            />
+          </div>
         </section>
       )}
 

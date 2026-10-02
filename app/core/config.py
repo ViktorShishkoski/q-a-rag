@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     ollama_context_length: int = 2048
     ollama_num_predict: int = 256
     ollama_num_parallel: int = 1
-    ollama_keep_alive: int = 0
+    ollama_keep_alive: int = 300
     ollama_think: bool = False
     ollama_timeout_s: float = 60.0
 
@@ -59,6 +59,9 @@ class Settings(BaseSettings):
 
     # --- Misc ---
     log_level: str = "INFO"
+    # Load the embedding model and the LLM in a background thread at server start
+    # so the first query doesn't pay the (tens of seconds) cold-load cost.
+    warmup_on_startup: bool = True
 
 
 def get_settings() -> Settings:

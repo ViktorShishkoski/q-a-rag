@@ -48,8 +48,8 @@ export function AppShell({ rail, children }: AppShellProps) {
   const chunkCount = documents.reduce((n, d) => n + (d.chunk_count ?? 0), 0);
 
   return (
-    <div className="flex min-h-svh flex-col bg-page text-ink">
-      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-6 border-b border-line bg-brand-bar px-7">
+    <div className="flex min-h-svh flex-col bg-page text-ink min-[1100px]:h-svh min-[1100px]:overflow-hidden">
+      <header className="sticky top-0 z-10 flex h-[60px] shrink-0 items-center justify-between gap-6 border-b border-line bg-brand-bar px-7">
         <div className="flex items-baseline gap-3 rounded-[5px] bg-[linear-gradient(180deg,#69D9CF,#F4EAE0)] px-1.5">
           <span className="text-[16px] font-bold tracking-[-0.01em] text-brand-ink">Q&amp;A RAG</span>
           <span className="font-mono text-[11px] tracking-[0.04em] text-brand-ink-2">
@@ -65,11 +65,13 @@ export function AppShell({ rail, children }: AppShellProps) {
         </div>
       </header>
 
-      <div className="grid flex-1 content-start items-start grid-cols-1 min-[1100px]:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="flex flex-col gap-[22px] border-b border-line bg-surface px-5 py-[22px] min-[1100px]:min-h-[calc(100vh-60px)] min-[1100px]:border-r min-[1100px]:border-b-0 min-[1100px]:sticky min-[1100px]:top-[60px]">
+      {/* Desktop: the shell is exactly one viewport tall; the rail and the main
+          column each scroll internally so nothing is pushed below the fold. */}
+      <div className="grid flex-1 grid-cols-1 content-start items-start min-[1100px]:min-h-0 min-[1100px]:grid-cols-[300px_minmax(0,1fr)] min-[1100px]:grid-rows-[minmax(0,1fr)] min-[1100px]:items-stretch">
+        <aside className="flex flex-col gap-[22px] border-b border-line bg-surface px-5 py-[22px] min-[1100px]:min-h-0 min-[1100px]:overflow-y-auto min-[1100px]:border-r min-[1100px]:border-b-0">
           {rail}
         </aside>
-        <main className="flex w-full max-w-[980px] flex-col gap-[22px] bg-main px-[34px] pt-[30px] pb-[60px]">
+        <main className="flex w-full flex-col bg-main px-[34px] pt-6 pb-10 min-[1100px]:min-h-0 min-[1100px]:overflow-hidden min-[1100px]:pb-6">
           {children}
         </main>
       </div>

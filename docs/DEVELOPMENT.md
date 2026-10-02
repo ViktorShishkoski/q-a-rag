@@ -98,8 +98,9 @@ are excluded. Ruff rule set is `E,F,I,UP,B,SIM`; `E501` (formatter's job) and `B
   drift — do not swap tokenisers to "fix" it.
 - **Python 3.11 only** (`py -3.11 -m venv .venv`) — pinned for wheel availability (torch,
   qdrant-client, sentence-transformers).
-- **First real query is slow (~20–30 s)** — `OLLAMA_KEEP_ALIVE=0` reloads the model per
-  call and sentence-transformers weights download once from Hugging Face. Not a bug.
+- **First real query is slow (~20–30 s)** — the LLM loads into memory (kept for
+  `OLLAMA_KEEP_ALIVE=300` s afterwards) and sentence-transformers weights download once
+  from Hugging Face. Not a bug.
 - **`IngestionWarning`s are logged only** (e.g. scanned page / no OCR) — they are not
   returned by `POST /documents`.
 

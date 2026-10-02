@@ -15,11 +15,10 @@ Pull it: `ollama pull qwen3:1.7b`. This app never pulls models automatically
 
 ## Every generation call is slow (~20-30s)
 
-Expected with `OLLAMA_KEEP_ALIVE=0` (the low-memory default): Ollama unloads
-the model after every request, so each call pays a reload cost. Set
-`OLLAMA_KEEP_ALIVE` to a positive number of seconds (or `-1` to keep it
-loaded indefinitely) if you have the RAM to spare and want faster repeated
-queries.
+Expected if `OLLAMA_KEEP_ALIVE=0`: Ollama unloads the model after every
+request, so each call pays a reload cost. The default is `300` (keep it loaded
+for 5 minutes after the last call); raise it, or use `-1` to keep it loaded
+indefinitely. Only the first query after a pause should be slow.
 
 ## Qdrant path / permission issues
 

@@ -36,7 +36,7 @@ export function QueryForm({
   return (
     <section className="rounded-xl border border-line bg-surface shadow-card">
       <textarea
-        rows={3}
+        rows={2}
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         onKeyDown={(e) => {
@@ -46,7 +46,7 @@ export function QueryForm({
           }
         }}
         placeholder="Ask a question about your documents…"
-        className="w-full resize-none border-0 bg-transparent px-5 pt-[18px] pb-1 text-[16px] leading-[1.55] tracking-[-0.005em] text-ink outline-none"
+        className="w-full resize-none border-0 bg-transparent px-5 pt-4 pb-1 text-[16px] leading-[1.55] tracking-[-0.005em] text-ink outline-none"
       />
 
       <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 border-t border-line-4 py-3 pr-4 pl-5">
